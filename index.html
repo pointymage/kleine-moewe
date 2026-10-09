@@ -258,7 +258,22 @@ main{position:relative;min-height:0}
 .wheel span{position:absolute;left:50%;top:50%;width:64px;margin:-9px 0 0 -32px;text-align:center;font-weight:700;font-size:13px;transform:rotate(var(--a)) translateY(-70px)}
 .sec{margin:4px 0 8px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--coral);font-weight:600}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-@media (max-width:380px){.pill{padding:0 7px;font-size:14px}.pill.lvl .bar{display:none}}
+#app{grid-template-columns:minmax(0,1fr)}
+.top{min-width:0}
+.top>*{flex-shrink:0}
+@media (max-width:440px){
+  #app{padding-inline:10px}
+  .top{gap:4px}
+  .pill{padding:0 6px;gap:3px;font-size:13px;height:30px}
+  .pill span{font-size:13px}
+  .pill.lvl .bar{display:none}
+  .pill.lvl b{width:22px;height:22px;font-size:12px}
+  .pill.en em{width:16px;height:16px;font-size:12px}
+  .icon{width:30px;height:30px;font-size:15px}
+  .tabs{gap:4px}
+  .tabs button{font-size:11.5px}
+}
+@media (max-width:350px){.pill.en small{display:none}}
 </style>
 
 <div id="app">
