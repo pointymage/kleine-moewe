@@ -1,8 +1,13 @@
 // Baut die installierbare App-Version (PWA) nach docs/: node build.js
+// Bilder: PNGs in img/ ablegen (Dateinamen siehe BILDER.md); sie werden automatisch eingebunden.
 const fs = require('fs'), path = require('path');
-const dir = __dirname, out = path.join(dir, 'docs');
-fs.mkdirSync(out, { recursive: true });
-const src = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+const dir = __dirname, out = path.join(dir, 'docs'), imgDir = path.join(dir, 'img');
+fs.mkdirSync(path.join(out, 'img'), { recursive: true });
+const imgs = fs.existsSync(imgDir) ? fs.readdirSync(imgDir).filter(f => /\.png$/i.test(f)) : [];
+for (const f of imgs) fs.copyFileSync(path.join(imgDir, f), path.join(out, 'img', f.toLowerCase()));
+const list = JSON.stringify(imgs.map(f => f.replace(/\.png$/i, '').toLowerCase()));
+let src = fs.readFileSync(path.join(dir, 'index.html'), 'utf8').replace(/\/\*ARTLIST\*\/\[[^\]]*\]/, '/*ARTLIST*/' + list);
+fs.writeFileSync(path.join(dir, 'index.html'), src); // Bilderliste auch für das Artifact
 const v = Date.now();
 fs.writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <html lang="de"><head>
@@ -21,7 +26,7 @@ ${src}
 `);
 fs.writeFileSync(path.join(out, 'manifest.webmanifest'), JSON.stringify({
   name: 'Kleine Möwe', short_name: 'Kleine Möwe', lang: 'de', start_url: './', scope: './',
-  display: 'fullscreen', orientation: 'portrait', background_color: '#0c3644', theme_color: '#0c3644',
+  display: 'fullscreen', orientation: 'any', background_color: '#0c3644', theme_color: '#0c3644',
   icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }, { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }],
 }, null, 2));
 fs.writeFileSync(path.join(out, 'sw.js'), `const C = 'km-${v}';
@@ -33,4 +38,4 @@ self.addEventListener('fetch', e => {
 });
 `);
 for (const f of ['icon-192.png', 'icon-512.png']) if (fs.existsSync(path.join(dir, f))) fs.copyFileSync(path.join(dir, f), path.join(out, f));
-console.log('docs/ gebaut');
+console.log(`docs/ gebaut, ${imgs.length} Bilder eingebunden`);

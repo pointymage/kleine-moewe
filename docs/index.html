@@ -278,6 +278,31 @@ main{position:relative;min-height:0}
 .dig{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .sand{aspect-ratio:1;max-width:100%;border-radius:10px;background:linear-gradient(#f3d9a0,#d9b06a);box-shadow:inset 0 -3px 0 rgba(120,80,30,.25);display:grid;place-items:center;font-size:22px}
 .sand.open{background:#f6ead0;box-shadow:inset 0 2px 4px rgba(120,80,30,.25)}
+.badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--coral);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;box-shadow:0 0 0 2px #fff;font-style:normal}
+.side,.rside{display:none}
+.side{flex-direction:column;gap:10px;padding-block:6px 14px;overflow-y:auto}
+.sbtn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:16px;background:linear-gradient(#fff8ea,#f1dfbd);box-shadow:inset 0 2px 0 #fff,0 4px 0 rgba(0,0,0,.25);font-weight:600;font-size:13px;color:var(--ink)}
+.sbtn .i{font-size:28px;line-height:1.1}
+.sbtn.on{background:linear-gradient(#ffe7a6,#f0ad2c)}
+.hero{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;text-align:center;font-size:13px}
+.hero span{display:grid;place-items:center;width:110px;height:110px;border-radius:50%;font-size:70px;background:radial-gradient(circle at 35% 30%,#fff,#ffd7a8);box-shadow:0 0 0 4px #fff,0 6px 0 rgba(0,0,0,.25)}
+.rside{flex-direction:column;gap:10px;padding-block:6px 14px;overflow-y:auto}
+.rside .evc{margin:0}
+.rside .packs{grid-template-columns:1fr 1fr;margin:0}
+.rside .pack small{min-height:0}
+.mail{display:flex;gap:10px;align-items:flex-start}
+.mail .av{width:40px;height:40px;font-size:24px}
+.mail .tt{flex:1;min-width:0;font-size:14px;line-height:1.4}
+.mail .tt b{display:block}
+@media (min-width:900px) and (min-height:560px){
+  body #app{max-width:1280px;grid-template-columns:150px minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr);column-gap:18px;grid-template-areas:"top top top" "side main rside"}
+  .top{grid-area:top} main{grid-area:main} .side{grid-area:side;display:flex} .rside{grid-area:rside;display:flex} .tabs{display:none}
+}
+.art{display:block;width:88%;height:88%;object-fit:contain;mix-blend-mode:multiply;pointer-events:none;-webkit-user-drag:none}
+.rq .art,.shelf .big .art,.slot .art{width:86%;height:86%}
+.ghost .art{width:calc(var(--t)*.9);height:calc(var(--t)*.9);mix-blend-mode:normal}
+.por .art,.hero .art{width:100%;height:100%;border-radius:50%;object-fit:cover;mix-blend-mode:normal}
+body.bgart #app{background:linear-gradient(rgba(12,54,68,.35),rgba(12,54,68,.55)),url(img/bg_harbor.png) center/cover}
 .sec{margin:4px 0 8px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--coral);font-weight:600}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 #app{grid-template-columns:minmax(0,1fr)}
@@ -306,8 +331,11 @@ main{position:relative;min-height:0}
     <div class="pill"><span>💎</span><b id="geN">0</b></div>
     <div class="pill"><span>⭐</span><b id="stN">0</b></div>
     <span class="sp"></span>
-    <button class="icon" id="btnSet" aria-label="Einstellungen">⚙</button>
+    <button class="icon" id="btnMail" aria-label="Post" style="position:relative">✉️<span class="badge" id="mailBadge" hidden></span></button>
+    <button class="icon" id="btnSet" aria-label="Menü">☰</button>
   </header>
+  <aside class="side" id="side"></aside>
+  <aside class="rside" id="rside"></aside>
   <main>
     <section id="vBoard" class="view">
       <div class="orders" id="orders"></div>
@@ -593,7 +621,7 @@ function deliver(k){
     S.board[idx] = null;
   }
   ensureDaily();
-  const coins = o.coins * (bonus().id === 'coins2' ? 2 : 1), pts = 2 + o.reqs.length;
+  const coins = Math.round(o.coins * (bonus().id === 'coins2' ? 2 : 1) * (vipActive() ? 1.1 : 1)), pts = 2 + o.reqs.length;
   S.coins += coins; S.stats.coins += coins; S.stars += o.stars; S.stats.orders++;
   addXp(o.stars); addPts(pts);
   const card = Math.random() < .25; if (card) S.packs++;
@@ -623,9 +651,12 @@ function regen(){
 function spendEnergy(){ if (S.energy >= EMAX) S.eTick = Date.now(); S.energy--; }
 
 // ---------- board logic ----------
+// painted artwork: build.js fills ART with the files found in img/; anything missing falls back to the emoji
+const ART = new Set(/*ARTLIST*/[]);
+const ic = (key, e, cls) => ART.has(key) ? `<img class="art${cls ? ' ' + cls : ''}" src="img/${key}.png" alt="" draggable="false">` : e;
 function info(it){
-  if (it.g) return { e: GENS[it.g].e, n: GENS[it.g].n };
-  const ch = CH[it.c]; return { e: ch.it[it.l][0], n: ch.it[it.l][1], max: ch.it.length - 1, ch };
+  if (it.g) return { e: GENS[it.g].e, h: ic('gen_' + it.g, GENS[it.g].e), n: GENS[it.g].n };
+  const ch = CH[it.c]; return { e: ch.it[it.l][0], h: ic(it.c + '_' + it.l, ch.it[it.l][0]), n: ch.it[it.l][1], max: ch.it.length - 1, ch };
 }
 function nearFree(i){
   const r0 = Math.floor(i / COLS), c0 = i % COLS; let best = -1, bd = 1e9;
@@ -727,6 +758,7 @@ function doTask(){
   let lines = [...t.s];
   if (S.task >= ch.tasks.length){
     S.gems += ch.gems; S.chap++; S.task = 0;
+    mail('paul', `Glückwunsch zu Kapitel ${S.chap}! Ganz Möwenhafen ist stolz auf dich.`, { packs:2, coins:200 });
     lines = lines.concat(ch.outro);
     const nx = CHAPTERS[S.chap];
     if (nx) lines = lines.concat([['title', `Kapitel ${S.chap + 1}`, nx.t]], nx.intro || []);
@@ -757,7 +789,7 @@ function nextLine(){
     const c = CAST[who];
     bub.style.setProperty('--c', c.c);
     bub.innerHTML = `<div class="por"></div><div class="who"></div><p class="say"></p><div class="tapn">Tippen ▸</div>`;
-    bub.querySelector('.por').textContent = c.e; bub.querySelector('.who').textContent = c.n; bub.querySelector('.say').textContent = a;
+    bub.querySelector('.por').innerHTML = ic('p_' + who, c.e); bub.querySelector('.who').textContent = c.n; bub.querySelector('.say').textContent = a;
   }
   d.appendChild(bub);
 }
@@ -766,7 +798,7 @@ $('skip').addEventListener('click', () => { dq = []; nextLine(); });
 
 // ---------- rendering ----------
 const boardEl = $('board');
-function render(){ if (invOpen()) openInv(); renderTop(); if (view === 'board'){ renderOrders(); renderBoard(); renderShelf(); renderHint(); } else renderCafe(); renderTabs(); }
+function render(){ if (invOpen()) openInv(); renderTop(); if (view === 'board'){ renderOrders(); renderBoard(); renderShelf(); renderHint(); } else renderCafe(); renderTabs(); renderSide(); }
 function fmtT(ms){ const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function renderTop(){
   $('lvN').textContent = S.level;
@@ -778,6 +810,7 @@ function renderTop(){
 function renderTabs(){
   const ch = CHAPTERS[S.chap];
   $('cafeDot').hidden = !(ch && S.stars >= ch.tasks[S.task].cost);
+  const mc = mailCount(); $('mailBadge').hidden = !mc; $('mailBadge').textContent = mc;
   $('evDot').hidden = !evAttention(); $('evIcon').textContent = evSym();
   $('tCafe').classList.toggle('pulse', S.tut === 3 && view === 'board');
   $('tBoard').classList.toggle('on', view === 'board'); $('tCafe').classList.toggle('on', view === 'cafe');
@@ -788,7 +821,7 @@ function renderOrders(){
     const st = orderStatus(o, counts), cu = CUST[o.cu];
     return `<div class="ord ${st.ready ? 'ready' : ''}">
       <div class="cu"><span class="av">${cu[0]}</span><span class="cn">${cu[1]}</span></div>
-      <div class="reqs">${o.reqs.map((r, j) => `<span class="rq ${st.have[j] ? 'have' : ''}" data-tip="${k}:${j}">${CH[r.c].it[r.l][0]}</span>`).join('')}</div>
+      <div class="reqs">${o.reqs.map((r, j) => `<span class="rq ${st.have[j] ? 'have' : ''}" data-tip="${k}:${j}">${ic(r.c + "_" + r.l, CH[r.c].it[r.l][0])}</span>`).join('')}</div>
       <div class="rw">+${o.coins} 🪙 · +${o.stars} ⭐</div>
       <button class="go" data-deliver="${k}" ${st.ready ? '' : 'disabled'}>Liefern</button></div>`;
   }).join('');
@@ -812,7 +845,7 @@ function renderBoard(){
         const gz = it.g ? '<i class="gz">⚡</i>' : '';
         if (it.lock === 1) cls += ' web';
         if (it.lock === 3) cls += ' bub';
-        inner = `<span class="e">${f.e}</span>${gz}`;
+        inner = `<span class="e">${f.h}</span>${gz}`;
         if (!it.g && it.c !== 'coin' && it.c !== 'energy') inner += `<b class="lv">${it.l === f.max ? '★' : it.l + 1}</b>`;
         if (!it.g && !it.lock && need.has(key(it.c, it.l))) inner += '<i class="ok">✓</i>';
       }
@@ -843,7 +876,7 @@ function renderShelf(){
     txt = `<div class="nm">${f.n}</div><div class="chain">${chain}</div><div class="sub">${sub}</div>`;
     if (!it.lock && it.c !== 'coin' && it.c !== 'energy') acts = `<button class="btn alt" data-act="sell">+${it.l + 1} 🪙</button><button class="btn" data-act="store">Lager</button>`;
   }
-  el.innerHTML = `<div class="big">${f.e}</div><div class="txt">${txt}</div><div class="acts">${acts}</div>`;
+  el.innerHTML = `<div class="big">${f.h}</div><div class="txt">${txt}</div><div class="acts">${acts}</div>`;
 }
 $('shelf').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -914,7 +947,7 @@ boardEl.addEventListener('pointermove', e => {
   if (!drag.on){
     const it = S.board[drag.i];
     if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8 || !it || it.lock) return;
-    drag.on = true; ghost.textContent = info(it).e; ghost.hidden = false;
+    drag.on = true; ghost.innerHTML = info(it).h; ghost.hidden = false;
     boardEl.children[drag.i].classList.add('lift');
   }
   ghost.style.transform = `translate(${e.clientX}px,${e.clientY}px) translate(-50%,-70%)`;
@@ -1035,6 +1068,8 @@ function ensureDaily(){
   if (!S.daily || S.daily.day !== dk){
     let h = 0; for (const ch of dk) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     const idx = [0,1,2,3,4,5].sort((a, b) => ((a * 7 + h) % 11) - ((b * 7 + h) % 11)).slice(0, 3);
+    if (!S.mail){ S.mail = []; mail('oma', 'Willkommen in Möwenhafen, Schätzchen! Hier ist ein kleines Startgeschenk.', { gems:5, energy:50, packs:1 }); }
+    else mail('oma', pick(['Guten Morgen! Hier ist dein Frühstückspaket.', 'Ich hab dir was vom Markt mitgebracht.', 'Jonas lässt dich grüßen. Und ich auch!']), { energy:20, coins:30 });
     S.daily = { day: dk, tasks: idx, claimed: [0,0,0], chest: 0, base: { merges:S.stats.merges, orders:S.stats.orders, made:S.stats.made, coins:S.stats.coins } };
   }
   if (!S.ev || S.ev.pid !== periodIdx()) S.ev = { pid: periodIdx(), t0: Date.now(), pts: 0, got: 0, done: 0, lvl: 0, open: [], found: 0 };
@@ -1153,6 +1188,89 @@ function tickBubbles(){
   if (ch){ save(); if (view === 'board') renderBoard(); }
 }
 
+// ---------- menus: achievements, mail, story log, monthly card, side panels ----------
+const ACH = [['merges','Verbinde {n} Teile',[50,200,600,1500]],['orders','Erfülle {n} Bestellungen',[10,40,120,300]],
+  ['made','Erzeuge {n} Teile',[100,400,1200,3000]],['coins','Verdiene {n} Münzen',[300,1500,6000,20000]]];
+const achRew = t => ({ gems: 3 + t * 4, energy: 20 + t * 20, packs: t ? 1 : 0 });
+const achTier = k => (S.ach || {})[k] || 0;
+const achReady = () => ACH.filter(([k, , l]) => achTier(k) < l.length && S.stats[k] >= l[achTier(k)]).length;
+function mail(from, txt, g){ if (!S.mail) S.mail = []; S.mail.unshift({ id: Date.now() + '' + rnd(1e6), from, txt, g: g || null, got: 0, seen: 0 }); S.mail = S.mail.slice(0, 25); }
+const mailCount = () => (S.mail || []).filter(m => !m.seen || (m.g && !m.got)).length;
+const vipActive = () => ((S.vip || {}).until || 0) > Date.now();
+const vipReady = () => vipActive() && S.vip.last !== dayKey();
+const VIP_DAY = { gems:10, energy:50, packs:1 };
+function openAch(){
+  openSheet('Aufträge', ACH.map(([k, txt, l]) => {
+    const t = achTier(k), done = t >= l.length, goal = done ? l[l.length - 1] : l[t], p = Math.min(S.stats[k], goal);
+    return `<div class="evc"><h3>${txt.replace('{n}', goal)}<small>Stufe ${Math.min(t + 1, l.length)}/${l.length}</small></h3>
+      <div class="bar2"><i style="width:${p / goal * 100}%"></i></div>
+      <div class="trow"><span class="tt"><small>${p}/${goal} · ${done ? 'Alle Stufen geschafft' : packText(achRew(t))}</small></span>${done ? '<span class="cd">✓</span>' : `<button class="btn${p >= goal ? ' warn' : ''}" data-m="ach-${k}" ${p >= goal ? '' : 'disabled'}>Abholen</button>`}</div></div>`;
+  }).join(''));
+}
+function openMail(){
+  (S.mail || []).forEach(m => m.seen = 1); save(); render();
+  const rows = (S.mail || []).map((m, i) => { const c = CAST[m.from] || { e:'📮', n:'Hafenpost' };
+    return `<div class="evc mail"><span class="av">${c.e}</span><span class="tt"><b>${c.n}</b>${m.txt}</span>${m.g ? (m.got ? '<span class="cd">✓</span>' : `<button class="btn warn" data-m="mail-${i}">${packText(m.g)}</button>`) : ''}</div>`; }).join('');
+  openSheet('Post', (S.mail || []).some(m => m.g && !m.got) ? `<button class="btn warn" data-m="mailall" style="width:100%;margin-bottom:10px">Alle Geschenke abholen</button>${rows}` : rows || '<p class="note">Keine Post.</p>');
+}
+function openStory(){
+  const rows = [`<div class="trow"><span class="tt">Prolog: Ankunft in Möwenhafen</span><button class="btn alt" data-m="story-intro">▶</button></div>`];
+  CHAPTERS.forEach((ch, c) => {
+    if (c > S.chap) return;
+    rows.push(`<div class="sec" style="margin-top:10px">Kapitel ${c + 1} · ${ch.t}</div>`);
+    ch.tasks.forEach((t, k) => { if (c < S.chap || k < S.task) rows.push(`<div class="trow"><span class="tt">${t.n}</span><button class="btn alt" data-m="story-${c}-${k}">▶</button></div>`); });
+  });
+  openSheet('Geschichte', `<div class="evc">${rows.join('')}</div><p class="note">Hier kannst du alle bisherigen Szenen noch einmal ansehen.</p>`);
+}
+function openMenu(){
+  const it = [['📋','Aufträge','ach', achReady()],['📖','Geschichte','story',0],['🃏','Sammelalbum','album', S.packs],['✉️','Post','mail', mailCount()],['🎟️','Monatskarte','shop', vipReady() ? 1 : 0],['⚙️','Einstellungen','set',0]];
+  openSheet('Menü', it.map(([e, n, k, b]) => `<div class="row"><span class="ri">${e}</span><span class="rt"><b>${n}</b></span>${b ? `<span class="badge" style="position:static">${b}</span>` : ''}<button class="btn alt" data-m="go-${k}">Öffnen</button></div>`).join(''));
+}
+function vipCard(){
+  return `<div class="evc hot"><h3>🎟️ Monatskarte${vipActive() ? `<small class="cd" data-to="${S.vip.until}"></small>` : ''}</h3>
+    <p>30 Tage lang jeden Tag ${packText(VIP_DAY)} und 10 % mehr Münzen für jede Bestellung.</p>
+    ${vipActive() ? `<button class="btn alt" data-m="vipclaim" ${vipReady() ? '' : 'disabled'}>${vipReady() ? 'Heutige Belohnung abholen' : 'Morgen wieder'}</button>` : '<button class="btn alt" data-m="vip"><s>4,99 €</s> Gratis aktivieren</button>'}</div>`;
+}
+function menuAction(k){
+  if (k.startsWith('ach-')){ const key = k.slice(4), a = ACH.find(x => x[0] === key), t = achTier(key);
+    if (t < a[2].length && S.stats[key] >= a[2][t]){ S.ach = S.ach || {}; S.ach[key] = t + 1; give(achRew(t)); toast('Auftrag erledigt: ' + packText(achRew(t))); } save(); render(); openAch(); return; }
+  if (k === 'mailall' || k.startsWith('mail-')){
+    (S.mail || []).forEach((m, i) => { if (m.g && !m.got && (k === 'mailall' || k === 'mail-' + i)){ m.got = 1; give(m.g); } });
+    toast('Geschenke abgeholt'); save(); render(); openMail(); return; }
+  if (k === 'story-intro'){ closeSheet(); playScene(INTRO); return; }
+  if (k.startsWith('story-')){ const [c, t] = k.slice(6).split('-').map(Number); closeSheet(); playScene(CHAPTERS[c].tasks[t].s); return; }
+  if (k === 'vip'){ S.vip = { until: Date.now() + 30 * DAY, last:'' }; toast('Monatskarte aktiviert: 30 Tage!'); }
+  if (k === 'vipclaim' && vipReady()){ S.vip.last = dayKey(); give(VIP_DAY); toast('Monatskarte: ' + packText(VIP_DAY)); }
+  if (k === 'vip' || k === 'vipclaim'){ save(); render(); openShop(); return; }
+  if (k.startsWith('go-')) sideGo(k.slice(3));
+}
+function sideGo(k){
+  if (k === 'board' || k === 'cafe'){ closeSheet(); setView(k); }
+  if (k === 'ach') openAch(); if (k === 'story') openStory(); if (k === 'events') openEvents(); if (k === 'shop') openShop();
+  if (k === 'mail') openMail(); if (k === 'album'){ lastPack = []; openAlbum(); } if (k === 'set') openSettings();
+}
+function renderSide(){
+  const sd = $('side'); if (!sd.offsetParent) return;
+  const ch = CHAPTERS[S.chap];
+  const b = [['🧩','Brett','board',0],['📋','Aufträge','ach',achReady()],['📖','Geschichte','story',0],['🔨','Renovierung','cafe', ch && S.stars >= ch.tasks[S.task].cost ? '!' : 0],
+    [evSym(),'Events','events', evAttention() ? '!' : 0],['🃏','Album','album', S.packs],['🛍️','Shop','shop', vipReady() ? '!' : 0]];
+  sd.innerHTML = b.map(([e, n, k, c]) => `<button class="sbtn${(k === 'board' || k === 'cafe') && view === k ? ' on' : ''}" data-side="${k}"><span class="i">${e}</span>${n}${c ? `<i class="badge">${c}</i>` : ''}</button>`).join('')
+    + `<div class="hero"><span>${ic("p_lina", "👩‍🦰")}</span>Lina · Kleine Möwe</div>`;
+  ensureDaily();
+  const t = evType(), evp = t === 'hunt' ? `${S.ev.pts} ${evSym()} · Stufe ${S.ev.got}/${MILE.length}` : t === 'race' ? `${Math.min(S.ev.pts, RACE_GOAL)}/${RACE_GOAL} 🏁${S.ev.done ? ' · Platz ' + S.ev.done : ''}` : `${S.ev.found}/3 Schätze · ${S.ev.pts} 🪏`;
+  const evw = t === 'hunt' ? (S.ev.got / MILE.length) : t === 'race' ? Math.min(1, S.ev.pts / RACE_GOAL) : S.ev.found / 3;
+  const evn = { hunt: theme()[1], race:'Hafenrennen', dig:'Schatzsuche' }[t];
+  $('rside').innerHTML = `
+    <div class="evc"><h3>🔨 Renovierung<small>${ch ? `Kapitel ${S.chap + 1} · ${S.task}/${ch.tasks.length}` : 'fertig'}</small></h3>
+      ${ch ? `<p>${ch.t}: <b>${ch.tasks[S.task].n}</b> (${ch.tasks[S.task].cost} ⭐)</p><div class="bar2"><i style="width:${S.task / ch.tasks.length * 100}%"></i></div>` : '<p>Staffel 1 abgeschlossen.</p>'}
+      <button class="btn warn" data-side="cafe">Zum Café</button></div>
+    <div class="evc"><h3>${evSym()} ${evn}<small class="cd" data-to="${periodEnd()}"></small></h3><p>${evp}</p><div class="bar2"><i style="width:${evw * 100}%"></i></div><button class="btn" data-side="events">Event öffnen</button></div>
+    <div class="evc"><h3>🃏 ${season().n}<small>${Object.keys(S.album.have).length}/18</small></h3><button class="btn" data-side="album">${S.packs ? S.packs + ' Pakete öffnen' : 'Album ansehen'}</button></div>
+    <div class="packs">${PACKS.slice(0, 2).map((p, k) => `<div class="pack" style="--p1:${p.c[0]};--p2:${p.c[1]}"><span class="pi">${p.e}</span><b>${p.n}</b><small>${packText(p.g)}</small><button class="btn warn" data-side="shop">Ansehen</button></div>`).join('')}</div>`;
+  tickCd();
+}
+document.addEventListener('click', e => { const s = e.target.closest('[data-side]'); if (s) sideGo(s.dataset.side); });
+
 // ---------- sheets ----------
 function openSheet(title, html, cls){ $('shT').textContent = title; $('shB').innerHTML = html; $('sheet').className = 'sheet' + (cls ? ' ' + cls : ''); $('sheet').hidden = false; }
 const invOpen = () => !$('sheet').hidden && $('sheet').classList.contains('float');
@@ -1181,10 +1299,11 @@ function openShop(){
     ['💎','3 Diamanten','Für Energie und mehr','gems','300 🪙', S.coins >= 300],
   ];
   const packs = PACKS.map((p, k) => `<div class="pack" style="--p1:${p.c[0]};--p2:${p.c[1]}">${p.tag ? `<span class="tag">${p.tag}</span>` : ''}<span class="pi">${p.e}</span><b>${p.n}</b><small>${packText(p.g)}</small><s>${p.price}</s><button class="btn warn" data-pack="${k}">Gratis holen</button></div>`).join('');
-  openSheet('Laden', `<div class="sec">Angebote</div><div class="packs">${packs}</div><div class="sec">Einzeln</div>` + rows.map(r => `<div class="row"><span class="ri">${r[0]}</span><span class="rt"><b>${r[1]}</b><small>${r[2]}</small></span><button class="btn" data-buy="${r[3]}" ${r[5] ? '' : 'disabled'}>${r[4]}</button></div>`).join('')
+  openSheet('Laden', vipCard() + `<div class="sec">Angebote</div><div class="packs">${packs}</div><div class="sec">Einzeln</div>` + rows.map(r => `<div class="row"><span class="ri">${r[0]}</span><span class="rt"><b>${r[1]}</b><small>${r[2]}</small></span><button class="btn" data-buy="${r[3]}" ${r[5] ? '' : 'disabled'}>${r[4]}</button></div>`).join('')
     + `<p class="note">Energie lädt sich von selbst auf: +1 ⚡ alle 90 Sekunden bis ${EMAX}, auch wenn das Spiel geschlossen ist.</p>`);
 }
 $('shB').addEventListener('click', e => {
+  const mm = e.target.closest('[data-m]'); if (mm){ menuAction(mm.dataset.m); return; }
   const ev = e.target.closest('[data-ev]'); if (ev){ evAction(ev.dataset.ev); return; }
   const pk = e.target.closest('[data-pack]');
   if (pk){
@@ -1225,7 +1344,7 @@ function openInv(){
   let h = '<div class="inv">';
   for (let k = 0; k < S.invSize; k++){
     const it = S.inv[k];
-    h += it ? `<button class="slot" data-slot="${k}" aria-label="${info(it).n} aufs Brett legen">${info(it).e}${!it.g && it.c !== 'coin' && it.c !== 'energy' ? `<b class="lv">${it.l + 1}</b>` : ''}</button>` : '<div class="slot empty"></div>';
+    h += it ? `<button class="slot" data-slot="${k}" aria-label="${info(it).n} aufs Brett legen">${info(it).h}${!it.g && it.c !== 'coin' && it.c !== 'energy' ? `<b class="lv">${it.l + 1}</b>` : ''}</button>` : '<div class="slot empty"></div>';
   }
   for (let k = S.invSize; k < S.inv.length; k++) h += `<button class="slot" data-slot="${k}">${info(S.inv[k]).e}</button>`;
   openSheet(`Lager ${S.inv.length}/${S.invSize}`, h + `</div><p class="note">Tippen legt ein Teil aufs Brett. Teile vom Brett hierher ziehen zum Einlagern.</p>`, 'float');
@@ -1249,7 +1368,8 @@ $('tEv').onclick = openEvents;
 $('tInv').onclick = () => invOpen() ? closeSheet() : openInv();
 $('tShop').onclick = openShop;
 $('pEn').onclick = openShop;
-$('btnSet').onclick = openSettings;
+$('btnSet').onclick = openMenu;
+$('btnMail').onclick = openMail;
 
 let tt = null;
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.hidden = false; t.style.animation = 'none'; void t.offsetWidth; t.style.animation = ''; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2200); }
@@ -1291,6 +1411,7 @@ const newest = (...xs) => xs.filter(Boolean).sort((a, b) => (b.savedAt || 0) - (
 
 // ---------- boot ----------
 function begin(){
+  if (ART.has('bg_harbor')) document.body.classList.add('bgart');
   S = norm(S); regen();
   S.stats = { merges:0, orders:0, made:0, coins:0, ...S.stats };
   ensureDaily();
