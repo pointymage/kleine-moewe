@@ -914,7 +914,7 @@ boardEl.addEventListener('pointercancel', e => endDrag(e, true));
 
 function fitBoard(){
   const bw = $('bw'); if (!bw.clientWidth) return;
-  const t = Math.floor(Math.min((bw.clientWidth - 12) / COLS, (bw.clientHeight - 18) / ROWS, 72));
+  const t = Math.floor(Math.min((bw.clientWidth - 12 - 3 * (COLS - 1)) / COLS, (bw.clientHeight - 18 - 3 * (ROWS - 1)) / ROWS, 72));
   document.documentElement.style.setProperty('--t', Math.max(30, t) + 'px');
 }
 new ResizeObserver(fitBoard).observe($('bw'));
