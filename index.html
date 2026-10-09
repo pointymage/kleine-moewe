@@ -256,6 +256,17 @@ main{position:relative;min-height:0}
 .wheel{position:relative;width:100%;height:100%;border-radius:50%;border:6px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.2);transition:transform 2.6s cubic-bezier(.15,.85,.25,1);
   background:conic-gradient(#ff8a9b 0 45deg,#ffd166 0 90deg,#4fd1e8 0 135deg,#b9a3ff 0 180deg,#5fd17f 0 225deg,#ffb36b 0 270deg,#7ec8ff 0 315deg,#f78fd0 0 360deg)}
 .wheel span{position:absolute;left:50%;top:50%;width:64px;margin:-9px 0 0 -32px;text-align:center;font-weight:700;font-size:13px;transform:rotate(var(--a)) translateY(-70px)}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.card{border-radius:12px;padding:8px 4px 6px;text-align:center;font-size:12px;line-height:1.25;background:linear-gradient(#fff,#f3e6cc);box-shadow:inset 0 0 0 2px #e5d3ad;color:var(--ink)}
+.card b{display:block;font-size:28px;line-height:1.15}
+.card small{display:block;color:var(--gold);font-size:11px}
+.card.r2{box-shadow:inset 0 0 0 2px #7ec8ff}
+.card.r3{box-shadow:inset 0 0 0 2px #b9a3ff;background:linear-gradient(#fff,#efe6ff)}
+.card.no{background:var(--tile-alt);box-shadow:none;color:var(--muted)}
+.card.no b{color:#cdbb98}
+.dig{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.sand{aspect-ratio:1;max-width:100%;border-radius:10px;background:linear-gradient(#f3d9a0,#d9b06a);box-shadow:inset 0 -3px 0 rgba(120,80,30,.25);display:grid;place-items:center;font-size:22px}
+.sand.open{background:#f6ead0;box-shadow:inset 0 2px 4px rgba(120,80,30,.25)}
 .sec{margin:4px 0 8px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--coral);font-weight:600}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 #app{grid-template-columns:minmax(0,1fr)}
@@ -574,7 +585,8 @@ function deliver(k){
   const coins = o.coins * (bonus().id === 'coins2' ? 2 : 1), pts = 2 + o.reqs.length;
   S.coins += coins; S.stats.coins += coins; S.stars += o.stars; S.stats.orders++;
   addXp(o.stars); addPts(pts);
-  toast(`+${coins} 🪙  +${o.stars} ⭐  +${pts * (bonus().id === 'tok2' ? 2 : 1)} ${theme()[0]}  Danke, ${CUST[o.cu][1]}!`);
+  const card = Math.random() < .25; if (card) S.packs++;
+  toast(`+${coins} 🪙  +${o.stars} ⭐  +${pts * (bonus().id === 'tok2' ? 2 : 1)} ${evSym()}${card ? '  +1 🃏' : ''}  Danke, ${CUST[o.cu][1]}!`);
   S.orders.splice(k, 1);
   S.orders.splice(k, 0, randomOrder());
   if (S.tut <= 2) S.tut = 3;
@@ -755,7 +767,7 @@ function renderTop(){
 function renderTabs(){
   const ch = CHAPTERS[S.chap];
   $('cafeDot').hidden = !(ch && S.stars >= ch.tasks[S.task].cost);
-  $('evDot').hidden = !evAttention(); $('evIcon').textContent = theme()[0];
+  $('evDot').hidden = !evAttention(); $('evIcon').textContent = evSym();
   $('tCafe').classList.toggle('pulse', S.tut === 3 && view === 'board');
   $('tBoard').classList.toggle('on', view === 'board'); $('tCafe').classList.toggle('on', view === 'cafe');
 }
@@ -937,12 +949,76 @@ const BONUS = [
 const MILE = [{p:10,g:{energy:25}},{p:25,g:{coins:100}},{p:45,g:{gems:5}},{p:70,g:{energy:60}},{p:100,g:{stars:3}},{p:140,g:{coins:300}},{p:190,g:{gems:15}},{p:250,g:{energy:150,gems:25,stars:5}}];
 const TASKS = [['merges',25,'Verbinde 25 Mal',{energy:30}],['orders',5,'Liefere 5 Bestellungen',{coins:80}],['made',40,'Erzeuge 40 Teile',{gems:2}],
   ['coins',150,'Verdiene 150 Münzen',{energy:40}],['merges',50,'Verbinde 50 Mal',{gems:3}],['orders',8,'Liefere 8 Bestellungen',{energy:60}]];
-const LOGIN = [{coins:50},{energy:30},{gems:3},{coins:100},{energy:60},{gems:5},{energy:100,gems:10,coins:200}];
-const WHEEL = [{energy:20},{coins:50},{gems:2},{energy:50},{coins:150},{stars:2},{gems:5},{energy:100}];
+const LOGIN = [{coins:50},{energy:30},{gems:3},{coins:100},{energy:60},{gems:5},{energy:100,gems:10,coins:200,packs:2}];
+const WHEEL = [{energy:20},{packs:1},{gems:2},{energy:50},{coins:150},{stars:2},{gems:5},{energy:100}];
 const SPIN_CD = 4 * 3600000;
 const bonus = () => BONUS[dayIdx() % BONUS.length];
-const theme = () => THEMES[weekIdx() % THEMES.length];
-function give(g){ S.energy += g.energy || 0; S.coins += g.coins || 0; S.gems += g.gems || 0; S.stars += g.stars || 0; S.invSize += g.slots || 0; if (g.coins) S.stats.coins += g.coins; }
+// rotating events: a new one every PERIOD days, no gaps
+const PERIOD = 3, EVTYPES = ['hunt','race','dig'];
+const periodIdx = () => Math.floor(dayIdx() / PERIOD);
+const periodEnd = () => nextMidnight() + (PERIOD - 1 - dayIdx() % PERIOD) * DAY;
+const periodStart = () => periodEnd() - PERIOD * DAY;
+const EVF = (() => { try { return new URLSearchParams(location.search).get('ev'); } catch (_) { return null; } })(); // nur zum Testen: ?ev=race
+const evType = () => EVTYPES.includes(EVF) ? EVF : EVTYPES[periodIdx() % EVTYPES.length];
+const theme = () => THEMES[Math.floor(periodIdx() / EVTYPES.length) % THEMES.length];
+const evSym = () => ({ hunt: theme()[0], race:'🏁', dig:'🪏' })[evType()];
+const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const RACE_GOAL = 80, BOTS = [['🧑‍✈️','Kapitän Henk'],['👩‍🦳','Tante Ruth'],['🧑‍🌾','Bäuerin Grete'],['👨‍🍳','Koch Bruno']];
+const RACE_REW = [{gems:30,packs:3},{gems:15,packs:2},{gems:8,packs:1},{energy:50,packs:1},{energy:30}];
+const raceT0 = () => S.ev.t0 || periodStart();
+const botFinish = k => (0.45 + rng(periodIdx() * 97 + k * 13)() * 0.5) * Math.max(6 * 3600000, periodEnd() - raceT0());
+const botPts = k => Math.min(RACE_GOAL, Math.floor(RACE_GOAL * (Date.now() - raceT0()) / botFinish(k)));
+function digMap(lvl){
+  const r = rng(periodIdx() * 131 + lvl * 17), cells = [];
+  for (let i = 0; i < 25; i++){ const x = r(); cells.push(x < .3 ? 'c' : x < .45 ? 'e' : 'r'); }
+  let n = 0; while (n < 3){ const i = Math.floor(r() * 25); if (cells[i] !== 't'){ cells[i] = 't'; n++; } }
+  return cells;
+}
+// collectible album: always on, theme changes every SEASON days
+const SEASON = 14;
+const SEASONS = [
+  ['Hafenleben', [['Fischerei','🎣Angel,⚓Anker,🛟Rettungsring,🦞Hummerkorb,🐙Krake,🚤Motorboot'],['Café','☕Kaffee,🥐Croissant,🍰Torte,🧁Cupcake,🫖Teekanne,🍮Pudding'],['Leute','👵Oma Hilde,🧔Jonas,👩‍🦰Lina,👩‍🦳Tante Ruth,🤵Marco,💁‍♀️Vanessa']]],
+  ['Sommer am Meer', [['Strand','🏖️Strand,🐚Muschel,⛱️Schirm,🦀Krabbe,🌊Welle,🏄Surfer'],['Eisdiele','🍦Softeis,🍧Granita,🍨Eisbecher,🍭Lolli,🍓Erdbeere,🍉Melone'],['Hafenfest','🎈Ballon,🎪Zelt,🎠Karussell,🎡Riesenrad,🎶Musik,🎆Feuerwerk']]],
+  ['Herbstzauber', [['Wald','🍂Laub,🍁Ahorn,🌰Kastanie,🍄Pilz,🦔Igel,🦉Eule'],['Erntezeit','🍎Apfel,🍐Birne,🥧Kuchen,🍪Keks,🎃Kürbis,🌽Mais'],['Gemütlich','☂️Schirm,🕯️Kerze,📚Bücher,🧶Wolle,🧣Schal,🫖Tee']]],
+  ['Winterhafen', [['Schnee','❄️Flocke,⛄Schneemann,🧤Handschuh,🛷Schlitten,🦌Rentier,🏔️Gipfel'],['Festtage','🔔Glocke,🍪Plätzchen,🎁Geschenk,🕯️Advent,⭐Stern,🎄Tanne'],['Hafenmarkt','☕Glühkaffee,🍫Schokolade,🥨Brezel,🧦Socken,🎶Chor,🏮Laterne']]],
+];
+const seasonIdx = () => Math.floor(dayIdx() / SEASON);
+const seasonEnd = () => nextMidnight() + (SEASON - 1 - dayIdx() % SEASON) * DAY;
+const season = () => { const s = SEASONS[seasonIdx() % SEASONS.length]; return { n: s[0], sets: s[1].map(([n, l]) => ({ n, cards: l.split(',').map(t => { const m = t.match(/^(.+?)([A-ZÄÖÜa-zäöü].*)$/); return [m[1], m[2]]; }) })) }; };
+const rarity = k => k < 3 ? 1 : k < 5 ? 2 : 3;
+const SET_REW = { gems:10, energy:50 }, ALBUM_REW = { gems:50, coins:1000, packs:5 };
+let lastPack = [];
+function openPack(){
+  if (S.packs < 1) return;
+  S.packs--; lastPack = [];
+  const se = season();
+  for (let n = 0; n < 3; n++){
+    const st = rnd(3), x = Math.random(), k = x < .6 ? rnd(3) : x < .9 ? 3 + rnd(2) : 5, id = st * 6 + k;
+    const dup = (S.album.have[id] || 0) > 0;
+    S.album.have[id] = (S.album.have[id] || 0) + 1;
+    if (dup) S.coins += 5 * rarity(k);
+    lastPack.push({ id, dup });
+  }
+  se.sets.forEach((s, st) => {
+    if (!S.album.sets[st] && [0,1,2,3,4,5].every(k => S.album.have[st * 6 + k])){ S.album.sets[st] = 1; give(SET_REW); setTimeout(() => toast(`Set „${s.n}" komplett! ${packText(SET_REW)}`), 600); }
+  });
+  if (!S.album.done && S.album.sets.every(Boolean)){ S.album.done = 1; give(ALBUM_REW); setTimeout(() => toast(`Album komplett! ${packText(ALBUM_REW)}`), 1600); }
+  save(); render(); openAlbum();
+}
+function openAlbum(){
+  ensureDaily();
+  const se = season(), have = S.album.have;
+  const total = Object.keys(have).length;
+  const last = lastPack.length ? `<div class="evc hot"><h3>Neu im Album</h3><div class="cards">${lastPack.map(c => { const [e, n] = se.sets[Math.floor(c.id / 6)].cards[c.id % 6]; return `<div class="card r${rarity(c.id % 6)}"><b>${e}</b>${n}<small>${c.dup ? 'doppelt: +' + 5 * rarity(c.id % 6) + ' 🪙' : '★'.repeat(rarity(c.id % 6))}</small></div>`; }).join('')}</div></div>` : '';
+  const sets = se.sets.map((s, st) => `<div class="evc"><h3>${s.n}<small>${s.cards.filter((_, k) => have[st * 6 + k]).length}/6 ${S.album.sets[st] ? '✓' : '· ' + packText(SET_REW)}</small></h3>
+    <div class="cards">${s.cards.map(([e, n], k) => have[st * 6 + k] ? `<div class="card r${rarity(k)}"><b>${e}</b>${n}<small>${'★'.repeat(rarity(k))}${have[st * 6 + k] > 1 ? ' ×' + have[st * 6 + k] : ''}</small></div>` : `<div class="card no"><b>?</b>${'★'.repeat(rarity(k))}</div>`).join('')}</div></div>`).join('');
+  openSheet(`Album: ${se.n}`, `<div class="evc"><h3>🃏 ${total}/18 Karten<small class="cd" data-to="${seasonEnd()}"></small></h3>
+    <p>Kartenpakete gibt es für Bestellungen, Events, Tagesaufgaben und im Laden. Doppelte Karten werden zu Münzen. Wenn die Zeit abläuft, startet ein neues Album.</p>
+    <button class="btn warn" data-ev="pack" ${S.packs ? '' : 'disabled'}>Kartenpaket öffnen (${S.packs})</button>
+    <button class="btn alt" data-ev="back">← Zurück zu den Events</button></div>${last}${sets}`);
+  tickCd();
+}
+function give(g){ S.energy += g.energy || 0; S.coins += g.coins || 0; S.gems += g.gems || 0; S.stars += g.stars || 0; S.invSize += g.slots || 0; S.packs = (S.packs || 0) + (g.packs || 0); if (g.coins) S.stats.coins += g.coins; }
 function ensureDaily(){
   const dk = dayKey();
   if (!S.daily || S.daily.day !== dk){
@@ -950,7 +1026,9 @@ function ensureDaily(){
     const idx = [0,1,2,3,4,5].sort((a, b) => ((a * 7 + h) % 11) - ((b * 7 + h) % 11)).slice(0, 3);
     S.daily = { day: dk, tasks: idx, claimed: [0,0,0], chest: 0, base: { merges:S.stats.merges, orders:S.stats.orders, made:S.stats.made, coins:S.stats.coins } };
   }
-  if (!S.ev || S.ev.wk !== weekIdx()) S.ev = { wk: weekIdx(), pts: 0, got: 0 };
+  if (!S.ev || S.ev.pid !== periodIdx()) S.ev = { pid: periodIdx(), t0: Date.now(), pts: 0, got: 0, done: 0, lvl: 0, open: [], found: 0 };
+  if (!S.album || S.album.sid !== seasonIdx()) S.album = { sid: seasonIdx(), have: {}, sets: [0,0,0], done: 0 };
+  if (S.packs === undefined) S.packs = 2;
   if (!S.login) S.login = { last:'', streak:0 };
 }
 const taskProg = k => { const t = TASKS[S.daily.tasks[k]]; return Math.min(t[1], S.stats[t[0]] - S.daily.base[t[0]]); };
@@ -959,11 +1037,17 @@ const spinReady = () => Date.now() - (S.spinAt || 0) >= SPIN_CD;
 function evAttention(){
   ensureDaily();
   const tasks = S.daily.tasks.some((t, k) => !S.daily.claimed[k] && taskProg(k) >= TASKS[t][1]);
-  return loginReady() || spinReady() || tasks || (S.daily.claimed.every(Boolean) && !S.daily.chest);
+  return loginReady() || spinReady() || tasks || (S.daily.claimed.every(Boolean) && !S.daily.chest) || S.packs > 0 || (evType() === 'dig' && S.ev.pts > 0);
 }
 function addPts(n){
   if (bonus().id === 'tok2') n *= 2;
   S.ev.pts += n;
+  if (evType() === 'race' && !S.ev.done && S.ev.pts >= RACE_GOAL){
+    const el = Date.now() - raceT0(), place = 1 + BOTS.filter((b, k) => botFinish(k) < el).length;
+    S.ev.done = place; const g = RACE_REW[place - 1]; give(g);
+    setTimeout(() => toast(`Hafenrennen: Platz ${place}! ${packText(g)}`), 1200);
+  }
+  if (evType() !== 'hunt') return;
   while (S.ev.got < MILE.length && S.ev.pts >= MILE[S.ev.got].p){
     const m = MILE[S.ev.got++]; give(m.g);
     setTimeout(() => toast(`${theme()[1]}: Stufe ${S.ev.got} erreicht! ${packText(m.g)}`), 1200);
@@ -984,19 +1068,35 @@ function openEvents(){
   const all = S.daily.claimed.every(Boolean);
   openSheet('Events', `
     <div class="evc hot"><h3>${b.e} ${b.n}<small class="cd" data-to="${nextMidnight()}"></small></h3><p>${b.d}</p></div>
-    <div class="evc"><h3>${th[0]} ${th[1]}<small class="cd" data-to="${weekEnd()}"></small></h3>
-      <p>Sammle ${th[2]} für Belohnungen: Jede Bestellung bringt 3 oder mehr Punkte, Verbindungen ab Stufe 3 manchmal 1. Du hast <b>${S.ev.pts} ${th[0]}</b>.</p>
-      ${nm ? `<div class="bar2"><i style="width:${(S.ev.pts - prev) / (nm.p - prev) * 100}%"></i></div>` : '<p>Alle Belohnungen dieser Woche geholt! 🎉</p>'}
-      <div class="miles">${MILE.map((m, k) => `<div class="mile${k < S.ev.got ? ' ok' : ''}"><b>${k < S.ev.got ? '✓' : m.p + ' ' + th[0]}</b>${packText(m.g)}</div>`).join('')}</div></div>
+    ${evType() === 'hunt' ? `<div class="evc"><h3>${th[0]} ${th[1]}<small class="cd" data-to="${periodEnd()}"></small></h3>
+      <p>Sammle ${th[2]} für Belohnungen: Jede Bestellung bringt 3 oder mehr, Verbindungen ab Stufe 3 manchmal 1. Du hast <b>${S.ev.pts} ${th[0]}</b>.</p>
+      ${nm ? `<div class="bar2"><i style="width:${(S.ev.pts - prev) / (nm.p - prev) * 100}%"></i></div>` : '<p>Alle Belohnungen geholt! 🎉</p>'}
+      <div class="miles">${MILE.map((m, k) => `<div class="mile${k < S.ev.got ? ' ok' : ''}"><b>${k < S.ev.got ? '✓' : m.p + ' ' + th[0]}</b>${packText(m.g)}</div>`).join('')}</div></div>` : evType() === 'race' ? raceCard() : digCard()}
+    <div class="evc"><h3>🃏 Album: ${season().n}<small class="cd" data-to="${seasonEnd()}"></small></h3>
+      <p>${Object.keys(S.album.have).length}/18 Karten gesammelt · ${S.packs} Kartenpakete</p>
+      <button class="btn warn" data-ev="album">Album öffnen</button></div>
+    <p class="note" style="margin:0 0 10px">Danach: ${{ hunt:'🏁 Hafenrennen', race:'🪏 Schatzsuche', dig:'Punktejagd' }[evType()]} · Jedes Event läuft ${PERIOD} Tage.</p>
     <div class="evc"><h3>🎡 Glücksrad${spinReady() ? '' : `<small class="cd" data-to="${S.spinAt + SPIN_CD}"></small>`}</h3>
       <div class="wheelbox"><div class="wheel" id="wheel" style="transform:rotate(${wheelRot}deg)">${WHEEL.map((w, k) => `<span style="--a:${k * 45 + 22.5}deg">${packText(w)}</span>`).join('')}</div></div>
       <button class="btn warn" data-ev="spin" ${spinReady() ? '' : 'disabled'}>${spinReady() ? 'Gratis drehen' : 'Alle 4 Stunden gratis'}</button></div>
     <div class="evc"><h3>📋 Tagesaufgaben<small class="cd" data-to="${nextMidnight()}"></small></h3>${tasks}
-      <div class="trow"><span class="tt">🎁 Truhe für alle drei<small>${packText({ gems:5, energy:50 })}</small></span>${S.daily.chest ? '<span class="cd">✓ erhalten</span>' : `<button class="btn${all ? ' warn' : ''}" data-ev="chest" ${all ? '' : 'disabled'}>Öffnen</button>`}</div></div>
+      <div class="trow"><span class="tt">🎁 Truhe für alle drei<small>${packText({ gems:5, energy:50, packs:1 })}</small></span>${S.daily.chest ? '<span class="cd">✓ erhalten</span>' : `<button class="btn${all ? ' warn' : ''}" data-ev="chest" ${all ? '' : 'disabled'}>Öffnen</button>`}</div></div>
     <div class="evc"><h3>📅 Tägliches Geschenk</h3>
       <div class="cal">${LOGIN.map((g, k) => `<div class="${k < cur || (k === cur && !loginReady()) ? 'ok' : k === cur ? 'now' : ''}"><b>${k === 6 ? '🎁' : packText(g).split(' ')[1]}</b>Tag ${k + 1}</div>`).join('')}</div>
       <button class="btn warn" data-ev="login" ${loginReady() ? '' : 'disabled'}>${loginReady() ? `Abholen: ${packText(LOGIN[cur])}` : 'Morgen wieder'}</button></div>`);
   tickCd();
+}
+function raceCard(){
+  const rows = [{ e:'👩‍🦰', n:'Du', p: Math.min(RACE_GOAL, S.ev.pts), me:1 }, ...BOTS.map((b, k) => ({ e:b[0], n:b[1], p: botPts(k) }))].sort((a, b) => b.p - a.p);
+  return `<div class="evc"><h3>🏁 Hafenrennen<small class="cd" data-to="${periodEnd()}"></small></h3>
+    <p>Wer zuerst ${RACE_GOAL} 🏁 hat, gewinnt. Punkte gibt es für Bestellungen und Verbindungen. ${S.ev.done ? `<b>Du bist auf Platz ${S.ev.done} ins Ziel gekommen!</b>` : 'Platz 1: 30 💎 · 3 🃏'}</p>
+    ${rows.map((r, i) => `<div class="trow"><span class="tt"${r.me ? ' style="font-weight:600"' : ''}>${i + 1}. ${r.e} ${r.n}<small><span class="bar2" style="display:block"><i style="width:${r.p / RACE_GOAL * 100}%"></i></span></small></span><span class="cd">${r.p}/${RACE_GOAL}</span></div>`).join('')}</div>`;
+}
+function digCard(){
+  const map = digMap(S.ev.lvl), ic = { t:'💰', c:'🪙', e:'⚡', r:'🪨' };
+  return `<div class="evc"><h3>🪏 Schatzsuche · Strand ${S.ev.lvl + 1}<small class="cd" data-to="${periodEnd()}"></small></h3>
+    <p>Grabe mit Schaufeln nach den 3 Schatztruhen (${S.ev.found}/3). Schaufeln gibt es für Bestellungen und Verbindungen. Du hast <b>${S.ev.pts} 🪏</b>.</p>
+    <div class="dig">${map.map((c, i) => S.ev.open.includes(i) ? `<div class="sand open">${ic[c]}</div>` : `<button class="sand" data-ev="dig${i}" aria-label="Graben"></button>`).join('')}</div></div>`;
 }
 function tickCd(){ document.querySelectorAll('[data-to]').forEach(el => el.textContent = 'noch ' + fmtLong(+el.dataset.to - Date.now())); }
 function evAction(k){
@@ -1007,7 +1107,24 @@ function evAction(k){
     const g = LOGIN[(S.login.streak - 1) % 7]; give(g); toast(`Tag ${(S.login.streak - 1) % 7 + 1}: ${packText(g)}`);
   }
   if (k.startsWith('task')){ const i = +k[4]; if (!S.daily.claimed[i] && taskProg(i) >= TASKS[S.daily.tasks[i]][1]){ S.daily.claimed[i] = 1; give(TASKS[S.daily.tasks[i]][3]); toast('Aufgabe erledigt: ' + packText(TASKS[S.daily.tasks[i]][3])); } }
-  if (k === 'chest' && !S.daily.chest && S.daily.claimed.every(Boolean)){ S.daily.chest = 1; give({ gems:5, energy:50 }); toast('Truhe geöffnet: 5 💎 · 50 ⚡'); }
+  if (k === 'chest' && !S.daily.chest && S.daily.claimed.every(Boolean)){ S.daily.chest = 1; give({ gems:5, energy:50, packs:1 }); toast('Truhe geöffnet: 5 💎 · 50 ⚡ · 1 🃏'); }
+  if (k === 'album'){ lastPack = []; openAlbum(); return; }
+  if (k === 'back'){ openEvents(); return; }
+  if (k === 'pack'){ openPack(); return; }
+  if (k.startsWith('dig')){
+    const i = +k.slice(3);
+    if (S.ev.pts < 1){ toast('Keine Schaufeln mehr. Liefere Bestellungen!'); return; }
+    if (S.ev.open.includes(i)) return;
+    S.ev.pts--; S.ev.open.push(i);
+    const c = digMap(S.ev.lvl)[i];
+    if (c === 'c'){ give({ coins:10 }); toast('+10 🪙'); }
+    if (c === 'e'){ give({ energy:5 }); toast('+5 ⚡'); }
+    if (c === 't'){
+      S.ev.found++; give({ coins:60 });
+      if (S.ev.found >= 3){ give({ gems:10, packs:2 }); toast(`Alle Schätze gefunden! 10 💎 · 2 🃏. Weiter zu Strand ${S.ev.lvl + 2}!`); S.ev.lvl++; S.ev.open = []; S.ev.found = 0; }
+      else toast(`Schatztruhe! +60 🪙 (${S.ev.found}/3)`);
+    }
+  }
   if (k === 'spin' && spinReady()){
     const w = rnd(WHEEL.length), a = w * 45 + 22.5;
     wheelRot += 1800 + ((360 - a) - (wheelRot % 360) + 720) % 360;
@@ -1036,10 +1153,11 @@ const PACKS = [
   { e:'⚡', n:'Energie-Truhe', price:'2,99 €', c:['#ffc94d','#ef8a1f'], g:{ energy:250 } },
   { e:'🪙', n:'Münzsack', price:'1,99 €', c:['#f2c14e','#b8860b'], g:{ coins:500 } },
   { e:'⭐', n:'Sterne-Paket', price:'3,99 €', c:['#9b7bff','#5b3fd1'], g:{ stars:10 } },
+  { e:'🃏', n:'Kartenpakete', price:'2,49 €', c:['#ff9de2','#c04fb0'], g:{ packs:5 } },
   { e:'💎', n:'Diamantenhaufen', price:'9,99 €', c:['#4fd1e8','#1b7f9c'], g:{ gems:50 } },
   { e:'👑', n:'Kapitäns-Paket', price:'19,99 €', tag:'Bester Wert', c:['#3fbf7f','#1f6b40'], g:{ energy:500, coins:1000, gems:100, stars:20, slots:4 } },
 ];
-const PACK_LBL = { energy:'⚡', coins:'🪙', gems:'💎', stars:'⭐', slots:'Lagerplätze' };
+const PACK_LBL = { energy:'⚡', coins:'🪙', gems:'💎', stars:'⭐', packs:'🃏', slots:'Lagerplätze' };
 const packText = g => Object.entries(g).map(([k, v]) => k === 'slots' ? `+${v} ${PACK_LBL[k]}` : `${v} ${PACK_LBL[k]}`).join(' · ');
 const shopCost = () => ({ slot: 100 * (S.invSize - 3) });
 function openShop(){
