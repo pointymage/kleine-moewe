@@ -929,6 +929,7 @@ function fitBoard(){
   document.documentElement.style.setProperty('--t', Math.max(30, t) + 'px');
 }
 new ResizeObserver(fitBoard).observe($('bw'));
+addEventListener('resize', fitBoard);
 
 // ---------- events ----------
 const DAY = 86400000;
@@ -1123,7 +1124,7 @@ function openSettings(){
 }
 
 // ---------- nav ----------
-function setView(v){ view = v; $('vBoard').hidden = v !== 'board'; $('vCafe').hidden = v !== 'cafe'; if (v === 'board') requestAnimationFrame(fitBoard); render(); }
+function setView(v){ view = v; $('vBoard').hidden = v !== 'board'; $('vCafe').hidden = v !== 'cafe'; render(); if (v === 'board'){ fitBoard(); requestAnimationFrame(fitBoard); } }
 $('tBoard').onclick = () => setView('board');
 $('tCafe').onclick = () => setView('cafe');
 $('tEv').onclick = openEvents;
