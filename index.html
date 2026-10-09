@@ -284,8 +284,7 @@ main{position:relative;min-height:0}
 .mail .tt{flex:1;min-width:0;font-size:14px;line-height:1.4}
 .mail .tt b{display:block}
 @media (min-width:900px) and (min-height:560px){
-  body #app{max-width:1280px;grid-template-columns:150px minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr);column-gap:18px;grid-template-areas:"top top top" "side main rside"}
-  .top{grid-area:top} main{grid-area:main} .side{grid-area:side;display:flex} .rside{grid-area:rside;display:flex} .tabs{display:none}
+  body #app{max-width:900px}
 }
 .art{display:block;width:88%;height:88%;object-fit:contain;mix-blend-mode:multiply;pointer-events:none;-webkit-user-drag:none}
 .rq .art,.shelf .big .art,.slot .art{width:86%;height:86%}
@@ -959,7 +958,7 @@ boardEl.addEventListener('pointercancel', e => endDrag(e, true));
 
 function fitBoard(){
   const bw = $('bw'); if (!bw.clientWidth) return;
-  const t = Math.floor(Math.min((bw.clientWidth - 12 - 3 * (COLS - 1)) / COLS, (bw.clientHeight - 18 - 3 * (ROWS - 1)) / ROWS, 72));
+  const t = Math.floor(Math.min((bw.clientWidth - 12 - 3 * (COLS - 1)) / COLS, (bw.clientHeight - 18 - 3 * (ROWS - 1)) / ROWS, 110));
   document.documentElement.style.setProperty('--t', Math.max(30, t) + 'px');
 }
 new ResizeObserver(fitBoard).observe($('bw'));
